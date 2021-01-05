@@ -5,6 +5,7 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Environment;
+import android.os.Process;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -25,7 +26,7 @@ import java.util.Date;
 public class CrashHandler implements Thread.UncaughtExceptionHandler {
     private static final String TAG = "CrashHandler";
     private static final boolean DEBUG = true;
-    private static final String PATH = Environment.getExternalStorageDirectory().getPath() + "/CrashTest/log/";
+    private static final String PATH = Environment.getDownloadCacheDirectory().getPath() + "/CrashTest/log/";
     private static final String FILE_NAME = "crash";
     private static final String FILE_NAME_SUFFIX = ".trace";
     private static CrashHandler INSTANCE = new CrashHandler();
@@ -41,9 +42,27 @@ public class CrashHandler implements Thread.UncaughtExceptionHandler {
         mContext = context;
     }
 
+    public static CrashHandler getINSTANCE(){
+        return INSTANCE;
+    }
+
     //当发生未捕获异常会回调该方法
     @Override
     public void uncaughtException(@NonNull Thread t, @NonNull Throwable e) {
+        try{
+            dumpExceptionToSDCard(e);
+            uploadExceptionToServer();
+        }catch (Exception ee){
+            ee.printStackTrace();
+        }
+        e.printStackTrace();
+
+        //如果系统提供了异常处理器，则调用它
+        if(mDefaultCrashHanlder != null){
+            mDefaultCrashHanlder.uncaughtException(t,e);
+        }else{
+            Process.killProcess(Process.myPid());
+        }
 
     }
 
@@ -58,8 +77,10 @@ public class CrashHandler implements Thread.UncaughtExceptionHandler {
         }
         File dir = new File(PATH);
         if(!dir.exists()){
-            dir.mkdir();
+            dir.mkdirs();
         }
+        boolean flag = dir.exists();
+
         long current = System.currentTimeMillis();
         String time = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date(current));
         File file = new File(PATH + FILE_NAME + time + FILE_NAME_SUFFIX);
@@ -74,6 +95,7 @@ public class CrashHandler implements Thread.UncaughtExceptionHandler {
 
         }catch (Exception e){
             Log.e(TAG,"dump crash info failed");
+            e.printStackTrace();
         }
     }
 
